@@ -1798,9 +1798,16 @@ const [loading, setLoading] = useState(true);
   ]);
 };
 
-  const deleteLead = (id: string) => {
-    setLeads((current) => current.filter((item) => item.id !== id));
-  };
+ const deleteLead = async (id: string) => {
+  const { error } = await supabase.from("leads").delete().eq("id", id);
+
+  if (error) {
+    console.error("Erro ao excluir lead:", error);
+    return;
+  }
+
+  setLeads((current) => current.filter((item) => item.id !== id));
+};
 
   if (loading) {
   return (
