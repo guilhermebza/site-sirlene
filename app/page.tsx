@@ -647,7 +647,7 @@ function AdminPanel({
       .filter(Boolean);
 
     onSaveProperty({
-      id: editingId || `${slug}-${Date.now()}`,
+      id: editingId || crypto.randomUUID(),
       slug,
       purpose: form.purpose.trim() || "Venda",
       title,
