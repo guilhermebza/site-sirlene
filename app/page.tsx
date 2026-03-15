@@ -1,5 +1,6 @@
 "use client";
 
+import { supabase } from "@/lib/supabase" 
 import React, { ChangeEvent, useEffect, useMemo, useState } from "react";
 import {
   Building2,
@@ -1569,19 +1570,73 @@ function PublicSite({
 }
 
 export default function SirleneImoveisSite() {
-  const [properties, setProperties] = useState<Property[]>(() => {
-    if (typeof window === "undefined") return defaultProperties;
-    const saved = window.localStorage.getItem("sirlene-properties");
-    return saved ? JSON.parse(saved) : defaultProperties;
-  });
-
-  const [leads, setLeads] = useState<Lead[]>(() => {
-    if (typeof window === "undefined") return defaultLeads;
-    const saved = window.localStorage.getItem("sirlene-leads");
-    return saved ? JSON.parse(saved) : defaultLeads;
-  });
+ const [properties, setProperties] = useState<Property[]>([]);
+const [leads, setLeads] = useState<Lead[]>([]);
+const [loading, setLoading] = useState(true);
 
   const [route, setRoute] = useState("");
+
+  useEffect(() => {
+  const loadData = async () => {
+    setLoading(true);
+
+    const [{ data: propertiesData, error: propertiesError }, { data: leadsData, error: leadsError }] =
+      await Promise.all([
+        supabase.from("properties").select("*").order("created_at", { ascending: false }),
+        supabase.from("leads").select("*").order("created_at", { ascending: false }),
+      ]);
+
+    if (propertiesError) {
+      console.error("Erro ao buscar imóveis:", propertiesError);
+    } else if (propertiesData) {
+      setProperties(
+        propertiesData.map((item) => ({
+          id: item.id,
+          slug: item.slug,
+          purpose: item.purpose,
+          title: item.title,
+          neighborhood: item.neighborhood,
+          city: item.city,
+          type: item.type,
+          price: item.price,
+          condoFee: item.condo_fee,
+          iptu: item.iptu,
+          beds: item.beds,
+          baths: item.baths,
+          garage: item.garage,
+          area: item.area,
+          highlight: item.highlight,
+          description: item.description,
+          images: item.images || [],
+          features: item.features || [],
+          mapEmbedUrl: item.map_embed_url,
+        }))
+      );
+    }
+
+    if (leadsError) {
+      console.error("Erro ao buscar leads:", leadsError);
+    } else if (leadsData) {
+      setLeads(
+        leadsData.map((item) => ({
+          id: item.id,
+          type: item.type,
+          propertyId: item.property_id || "",
+          propertyTitle: item.property_title,
+          name: item.name,
+          phone: item.phone,
+          email: item.email,
+          message: item.message,
+          createdAt: item.created_at,
+        }))
+      );
+    }
+
+    setLoading(false);
+  };
+
+  loadData();
+}, []);
 
   useEffect(() => {
     const updateRoute = () => setRoute(window.location.hash || "");
@@ -1616,19 +1671,6 @@ export default function SirleneImoveisSite() {
   };
 }, []);
 
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem("sirlene-properties", JSON.stringify(properties));
-    }
-  }, [properties]);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem("sirlene-leads", JSON.stringify(leads));
-    }
-  }, [leads]);
-
   const propertyMatch = route.match(/^#\/imovel\/(.+)$/);
   const panelMatch = route.startsWith("#/painel");
   const property = propertyMatch ? properties.find((item) => item.slug === propertyMatch[1]) : null;
@@ -1641,35 +1683,132 @@ export default function SirleneImoveisSite() {
     window.location.hash = "/painel";
   };
 
-  const saveProperty = (incomingProperty: Property) => {
-    setProperties((current) => {
-      const exists = current.some((item) => item.id === incomingProperty.id);
-      if (exists) {
-        return current.map((item) => (item.id === incomingProperty.id ? incomingProperty : item));
-      }
-      return [incomingProperty, ...current];
-    });
+ const saveProperty = async (incomingProperty: Property) => {
+  const payload = {
+    id: incomingProperty.id,
+    slug: incomingProperty.slug,
+    purpose: incomingProperty.purpose,
+    title: incomingProperty.title,
+    neighborhood: incomingProperty.neighborhood,
+    city: incomingProperty.city,
+    type: incomingProperty.type,
+    price: incomingProperty.price,
+    condo_fee: incomingProperty.condoFee,
+    iptu: incomingProperty.iptu,
+    beds: incomingProperty.beds,
+    baths: incomingProperty.baths,
+    garage: incomingProperty.garage,
+    area: incomingProperty.area,
+    highlight: incomingProperty.highlight,
+    description: incomingProperty.description,
+    images: incomingProperty.images,
+    features: incomingProperty.features,
+    map_embed_url: incomingProperty.mapEmbedUrl,
   };
 
-  const deleteProperty = (id: string) => {
-    setProperties((current) => current.filter((item) => item.id !== id));
-    setLeads((current) => current.filter((item) => item.propertyId !== id));
+  const { data, error } = await supabase
+    .from("properties")
+    .upsert(payload)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Erro ao salvar imóvel:", error);
+    return;
+  }
+
+  const normalized: Property = {
+    id: data.id,
+    slug: data.slug,
+    purpose: data.purpose,
+    title: data.title,
+    neighborhood: data.neighborhood,
+    city: data.city,
+    type: data.type,
+    price: data.price,
+    condoFee: data.condo_fee,
+    iptu: data.iptu,
+    beds: data.beds,
+    baths: data.baths,
+    garage: data.garage,
+    area: data.area,
+    highlight: data.highlight,
+    description: data.description,
+    images: data.images || [],
+    features: data.features || [],
+    mapEmbedUrl: data.map_embed_url,
   };
 
-  const addLead = (incomingLead: Omit<Lead, "id" | "createdAt">) => {
-    setLeads((current) => [
-      {
-        ...incomingLead,
-        id: `${incomingLead.type}-${Date.now()}`,
-        createdAt: new Date().toISOString(),
-      },
-      ...current,
-    ]);
+  setProperties((current) => {
+    const exists = current.some((item) => item.id === normalized.id);
+    if (exists) {
+      return current.map((item) => (item.id === normalized.id ? normalized : item));
+    }
+    return [normalized, ...current];
+  });
+};
+
+  const deleteProperty = async (id: string) => {
+  const { error } = await supabase.from("properties").delete().eq("id", id);
+
+  if (error) {
+    console.error("Erro ao excluir imóvel:", error);
+    return;
+  }
+
+  setProperties((current) => current.filter((item) => item.id !== id));
+  setLeads((current) => current.filter((item) => item.propertyId !== id));
+};
+
+  const addLead = async (incomingLead: Omit<Lead, "id" | "createdAt">) => {
+  const payload = {
+    type: incomingLead.type,
+    property_id: incomingLead.propertyId || null,
+    property_title: incomingLead.propertyTitle,
+    name: incomingLead.name,
+    phone: incomingLead.phone,
+    email: incomingLead.email,
+    message: incomingLead.message,
   };
+
+  const { data, error } = await supabase
+    .from("leads")
+    .insert(payload)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Erro ao salvar lead:", error);
+    return;
+  }
+
+  setLeads((current) => [
+    {
+      id: data.id,
+      type: data.type,
+      propertyId: data.property_id || "",
+      propertyTitle: data.property_title,
+      name: data.name,
+      phone: data.phone,
+      email: data.email,
+      message: data.message,
+      createdAt: data.created_at,
+    },
+    ...current,
+  ]);
+};
 
   const deleteLead = (id: string) => {
     setLeads((current) => current.filter((item) => item.id !== id));
   };
+
+  if (loading) {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-white text-slate-900">
+      Carregando...
+    </div>
+  );
+}
 
   if (panelMatch) {
     return (
