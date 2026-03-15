@@ -1,27 +1,27 @@
 "use client";
 
-import { supabase } from "@/lib/supabase" 
 import React, { ChangeEvent, useEffect, useMemo, useState } from "react";
 import {
+  Bath,
+  BedDouble,
   Building2,
-  MapPin,
-  Phone,
+  Car,
+  Home,
+  Lock,
   Mail,
+  MapPin,
+  Menu,
   MessageCircle,
+  Pencil,
+  Phone,
   Search,
   Star,
-  BedDouble,
-  Bath,
-  Car,
-  Menu,
-  X,
-  Lock,
-  Pencil,
   Trash2,
   Upload,
-  Home,
   Users,
+  X,
 } from "lucide-react";
+import { supabase } from "../lib/supabase";
 
 const WHATSAPP_NUMBER = "5554996411910";
 const EMAIL = "sirlene.regina@creci.org.br";
@@ -97,9 +97,6 @@ type LeadFormState = {
   message: string;
 };
 
-const defaultProperties: Property[] = [];
-const defaultLeads: Lead[] = [];
-
 function slugify(value: string) {
   return value
     .toLowerCase()
@@ -149,6 +146,44 @@ function readFilesAsDataUrls(files: File[]): Promise<string[]> {
         })
     )
   );
+}
+
+function normalizeProperty(row: any): Property {
+  return {
+    id: String(row.id ?? ""),
+    slug: String(row.slug ?? ""),
+    purpose: String(row.purpose ?? "Venda"),
+    title: String(row.title ?? ""),
+    neighborhood: String(row.neighborhood ?? ""),
+    city: String(row.city ?? "Caxias do Sul"),
+    type: String(row.type ?? "Apartamento"),
+    price: String(row.price ?? ""),
+    condoFee: String(row.condo_fee ?? ""),
+    iptu: String(row.iptu ?? ""),
+    beds: Number(row.beds ?? 0),
+    baths: Number(row.baths ?? 0),
+    garage: Number(row.garage ?? 0),
+    area: String(row.area ?? ""),
+    highlight: String(row.highlight ?? ""),
+    description: String(row.description ?? ""),
+    images: Array.isArray(row.images) ? row.images : [],
+    features: Array.isArray(row.features) ? row.features : [],
+    mapEmbedUrl: String(row.map_embed_url ?? ""),
+  };
+}
+
+function normalizeLead(row: any): Lead {
+  return {
+    id: String(row.id ?? ""),
+    type: (row.type === "property" ? "property" : "general") as LeadType,
+    propertyId: String(row.property_id ?? ""),
+    propertyTitle: String(row.property_title ?? ""),
+    name: String(row.name ?? ""),
+    phone: String(row.phone ?? ""),
+    email: String(row.email ?? ""),
+    message: String(row.message ?? ""),
+    createdAt: String(row.created_at ?? new Date().toISOString()),
+  };
 }
 
 function PropertyCard({ property }: { property: Property }) {
@@ -217,7 +252,7 @@ function InterestForm({
   onSubmitLead,
 }: {
   property: Property;
-  onSubmitLead: (lead: Omit<Lead, "id" | "createdAt">) => void;
+  onSubmitLead: (lead: Omit<Lead, "id" | "createdAt">) => Promise<void>;
 }) {
   const [form, setForm] = useState<LeadFormState>({
     name: "",
@@ -225,11 +260,11 @@ function InterestForm({
     email: "",
     message: "",
   });
-
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const submit = (e: React.FormEvent<HTMLFormElement>) => {
+  const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (!form.name.trim() || !form.phone.trim()) {
@@ -238,31 +273,33 @@ function InterestForm({
       return;
     }
 
-    onSubmitLead({
-      type: "property",
-      propertyId: property.id,
-      propertyTitle: property.title,
-      name: form.name.trim(),
-      phone: form.phone.trim(),
-      email: form.email.trim(),
-      message: form.message.trim(),
-    });
+    try {
+      setSubmitting(true);
+      await onSubmitLead({
+        type: "property",
+        propertyId: property.id,
+        propertyTitle: property.title,
+        name: form.name.trim(),
+        phone: form.phone.trim(),
+        email: form.email.trim(),
+        message: form.message.trim(),
+      });
 
-    setForm({
-      name: "",
-      phone: "",
-      email: "",
-      message: "",
-    });
-
-    setError("");
-    setSent(true);
+      setForm({ name: "", phone: "", email: "", message: "" });
+      setError("");
+      setSent(true);
+    } catch (err) {
+      console.error(err);
+      setError("Não foi possível enviar agora.");
+      setSent(false);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
     <div className="mt-8 rounded-[2rem] border border-slate-200 bg-slate-50 p-6">
       <h3 className="text-2xl font-bold text-slate-900">Tenho interesse neste imóvel</h3>
-
       <p className="mt-2 text-sm leading-7 text-slate-600">
         Preencha seus dados e a Regina poderá entrar em contato com você depois.
       </p>
@@ -275,7 +312,6 @@ function InterestForm({
             placeholder="Seu nome"
             className={inputClass()}
           />
-
           <input
             value={form.phone}
             onChange={(e) => setForm({ ...form, phone: e.target.value })}
@@ -299,8 +335,8 @@ function InterestForm({
         />
 
         <div className="flex flex-col gap-3 pt-2 sm:flex-row">
-          <button type="submit" className={buttonClass(true)}>
-            Enviar interesse
+          <button type="submit" className={buttonClass(true)} disabled={submitting}>
+            {submitting ? "Enviando..." : "Enviar interesse"}
           </button>
 
           <a
@@ -313,7 +349,6 @@ function InterestForm({
         </div>
 
         {error ? <p className="text-sm font-medium text-red-600">{error}</p> : null}
-
         {sent ? (
           <p className="text-sm font-medium text-emerald-700">
             Recebemos seu interesse. Em breve entraremos em contato.
@@ -327,7 +362,7 @@ function InterestForm({
 function GeneralContactForm({
   onSubmitLead,
 }: {
-  onSubmitLead: (lead: Omit<Lead, "id" | "createdAt">) => void;
+  onSubmitLead: (lead: Omit<Lead, "id" | "createdAt">) => Promise<void>;
 }) {
   const [form, setForm] = useState<LeadFormState>({
     name: "",
@@ -335,11 +370,11 @@ function GeneralContactForm({
     email: "",
     message: "",
   });
-
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const submit = (e: React.FormEvent<HTMLFormElement>) => {
+  const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (!form.name.trim() || !form.phone.trim()) {
@@ -348,25 +383,28 @@ function GeneralContactForm({
       return;
     }
 
-    onSubmitLead({
-      type: "general",
-      propertyId: "",
-      propertyTitle: "Contato geral",
-      name: form.name.trim(),
-      phone: form.phone.trim(),
-      email: form.email.trim(),
-      message: form.message.trim(),
-    });
+    try {
+      setSubmitting(true);
+      await onSubmitLead({
+        type: "general",
+        propertyId: "",
+        propertyTitle: "Contato geral",
+        name: form.name.trim(),
+        phone: form.phone.trim(),
+        email: form.email.trim(),
+        message: form.message.trim(),
+      });
 
-    setForm({
-      name: "",
-      phone: "",
-      email: "",
-      message: "",
-    });
-
-    setError("");
-    setSent(true);
+      setForm({ name: "", phone: "", email: "", message: "" });
+      setError("");
+      setSent(true);
+    } catch (err) {
+      console.error(err);
+      setError("Não foi possível enviar agora.");
+      setSent(false);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -401,13 +439,12 @@ function GeneralContactForm({
       />
 
       <div className="flex flex-col gap-3 pt-2 sm:flex-row">
-        <button type="submit" className={buttonClass(true)}>
-          Solicitar atendimento
+        <button type="submit" className={buttonClass(true)} disabled={submitting}>
+          {submitting ? "Enviando..." : "Solicitar atendimento"}
         </button>
       </div>
 
       {error ? <p className="text-sm font-medium text-red-600">{error}</p> : null}
-
       {sent ? (
         <p className="text-sm font-medium text-emerald-700">
           Recebemos sua solicitação. Em breve a Regina poderá entrar em contato.
@@ -424,7 +461,7 @@ function PropertyDetailPage({
 }: {
   property: Property;
   onBack: () => void;
-  onSubmitLead: (lead: Omit<Lead, "id" | "createdAt">) => void;
+  onSubmitLead: (lead: Omit<Lead, "id" | "createdAt">) => Promise<void>;
 }) {
   const [activeImage, setActiveImage] = useState(property.images[0] || "");
 
@@ -565,9 +602,9 @@ function AdminPanel({
 }: {
   properties: Property[];
   leads: Lead[];
-  onSaveProperty: (property: Property) => void;
-  onDeleteProperty: (id: string) => void;
-  onDeleteLead: (id: string) => void;
+  onSaveProperty: (property: Property) => Promise<boolean>;
+  onDeleteProperty: (id: string) => Promise<void>;
+  onDeleteLead: (id: string) => Promise<void>;
   onClose: () => void;
 }) {
   const emptyForm: PropertyFormState = {
@@ -599,14 +636,31 @@ function AdminPanel({
   const [form, setForm] = useState<PropertyFormState>(emptyForm);
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<"imoveis" | "interessados">("imoveis");
+  const [saving, setSaving] = useState(false);
 
   const handleEdit = (property: Property) => {
     setEditingId(property.id);
     setUploadedImages(property.images.filter((img) => img.startsWith("data:image")));
     setForm({
-      ...property,
+      id: property.id,
+      slug: property.slug,
+      purpose: property.purpose,
+      title: property.title,
+      neighborhood: property.neighborhood,
+      city: property.city,
+      type: property.type,
+      price: property.price,
+      condoFee: property.condoFee,
+      iptu: property.iptu,
+      beds: property.beds,
+      baths: property.baths,
+      garage: property.garage,
+      area: property.area,
+      highlight: property.highlight,
+      description: property.description,
       imagesText: property.images.filter((img) => !img.startsWith("data:image")).join("\n"),
       featuresText: property.features.join(", "),
+      mapEmbedUrl: property.mapEmbedUrl,
     });
     setActiveTab("imoveis");
   };
@@ -630,11 +684,16 @@ function AdminPanel({
     setUploadedImages((current) => current.filter((_, i) => i !== index));
   };
 
-  const submitForm = (e: React.FormEvent<HTMLFormElement>) => {
+  const submitForm = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     const title = form.title.trim();
     const slug = form.slug.trim() || slugify(title);
+
+    if (!title) {
+      alert("Preencha o título do imóvel.");
+      return;
+    }
 
     const urlImages = form.imagesText
       .split("\n")
@@ -646,7 +705,8 @@ function AdminPanel({
       .map((item) => item.trim())
       .filter(Boolean);
 
-    onSaveProperty({
+    setSaving(true);
+    const ok = await onSaveProperty({
       id: editingId || crypto.randomUUID(),
       slug,
       purpose: form.purpose.trim() || "Venda",
@@ -667,8 +727,13 @@ function AdminPanel({
       features,
       mapEmbedUrl: form.mapEmbedUrl.trim(),
     });
+    setSaving(false);
 
-    resetForm();
+    if (ok) {
+      resetForm();
+    } else {
+      alert("Não foi possível salvar o imóvel. Veja o erro no console do navegador.");
+    }
   };
 
   if (!authenticated) {
@@ -922,8 +987,8 @@ function AdminPanel({
                 />
 
                 <div className="flex gap-3">
-                  <button type="submit" className={buttonClass(true)}>
-                    {editingId ? "Salvar alterações" : "Cadastrar imóvel"}
+                  <button type="submit" className={buttonClass(true)} disabled={saving}>
+                    {saving ? "Salvando..." : editingId ? "Salvar alterações" : "Cadastrar imóvel"}
                   </button>
                   <button type="button" className={buttonClass(false)} onClick={resetForm}>
                     Limpar
@@ -973,7 +1038,7 @@ function AdminPanel({
 
                       <button
                         className="inline-flex cursor-pointer items-center justify-center rounded-2xl border border-red-200 px-5 py-3 font-semibold text-red-600 transition hover:bg-red-50"
-                        onClick={() => onDeleteProperty(property.id)}
+                        onClick={() => void onDeleteProperty(property.id)}
                       >
                         <Trash2 className="mr-2 h-4 w-4" /> Excluir
                       </button>
@@ -1051,7 +1116,7 @@ function AdminPanel({
 
                     <button
                       className="inline-flex cursor-pointer items-center justify-center rounded-2xl border border-red-200 px-5 py-3 font-semibold text-red-600 transition hover:bg-red-50"
-                      onClick={() => onDeleteLead(lead.id)}
+                      onClick={() => void onDeleteLead(lead.id)}
                     >
                       <Trash2 className="mr-2 h-4 w-4" /> Excluir
                     </button>
@@ -1073,7 +1138,7 @@ function PublicSite({
 }: {
   properties: Property[];
   goToAdmin: () => void;
-  onSubmitLead: (lead: Omit<Lead, "id" | "createdAt">) => void;
+  onSubmitLead: (lead: Omit<Lead, "id" | "createdAt">) => Promise<void>;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -1151,21 +1216,11 @@ function PublicSite({
         {mobileOpen ? (
           <div className="border-t border-slate-200 bg-white md:hidden">
             <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-4">
-              <a href="#imoveis" className="rounded-xl px-2 py-2 text-slate-700">
-                Imóveis
-              </a>
-              <a href="#servicos" className="rounded-xl px-2 py-2 text-slate-700">
-                Serviços
-              </a>
-              <a href="#contato" className="rounded-xl px-2 py-2 text-slate-700">
-                Contato
-              </a>
-              <a href="#sobre" className="rounded-xl px-2 py-2 text-slate-700">
-                Sobre
-              </a>
-              <a href="#faq" className="rounded-xl px-2 py-2 text-slate-700">
-                FAQ
-              </a>
+              <a href="#imoveis" className="rounded-xl px-2 py-2 text-slate-700">Imóveis</a>
+              <a href="#servicos" className="rounded-xl px-2 py-2 text-slate-700">Serviços</a>
+              <a href="#contato" className="rounded-xl px-2 py-2 text-slate-700">Contato</a>
+              <a href="#sobre" className="rounded-xl px-2 py-2 text-slate-700">Sobre</a>
+              <a href="#faq" className="rounded-xl px-2 py-2 text-slate-700">FAQ</a>
             </div>
           </div>
         ) : null}
@@ -1231,15 +1286,11 @@ function PublicSite({
         <section id="imoveis" className="mx-auto max-w-7xl px-4 py-20">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
-              <div className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-700">
-                Imóveis
-              </div>
+              <div className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-700">Imóveis</div>
               <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-900 md:text-4xl">
                 Filtre aqui e encontre seu imóvel ideal
               </h2>
-              <p className="mt-4 text-lg leading-8 text-slate-600">
-                Filtre por cidade, bairro e necessidade.
-              </p>
+              <p className="mt-4 text-lg leading-8 text-slate-600">Filtre por cidade, bairro e necessidade.</p>
             </div>
 
             <div className="w-full max-w-xl space-y-3">
@@ -1330,9 +1381,7 @@ function PublicSite({
           <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr]">
             <div>
               <div className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-700">Contato</div>
-              <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-900 md:text-4xl">
-                Solicite atendimento
-              </h2>
+              <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-900 md:text-4xl">Solicite atendimento</h2>
 
               <p className="mt-4 text-lg leading-8 text-slate-600">
                 Ainda não encontrou o imóvel certo ou quer conversar antes? Deixe seus dados e a Regina pode falar com você depois.
@@ -1362,9 +1411,7 @@ function PublicSite({
                   </div>
                   <div>
                     <div className="text-sm text-slate-500">E-mail</div>
-                    <a href={`mailto:${EMAIL}`} className="font-semibold text-slate-900">
-                      {EMAIL}
-                    </a>
+                    <a href={`mailto:${EMAIL}`} className="font-semibold text-slate-900">{EMAIL}</a>
                   </div>
                 </div>
 
@@ -1394,9 +1441,7 @@ function PublicSite({
         <section id="sobre" className="mx-auto max-w-7xl px-4 py-20">
           <div className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
             <div>
-              <div className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-700">
-                Sobre a corretora
-              </div>
+              <div className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-700">Sobre a corretora</div>
               <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-900 md:text-4xl">
                 Presença elegante, confiável e pronta para crescer
               </h2>
@@ -1465,9 +1510,7 @@ function PublicSite({
         <section id="faq" className="bg-slate-50 py-20">
           <div className="mx-auto max-w-4xl px-4">
             <div className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-700">FAQ</div>
-            <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-900 md:text-4xl">
-              Perguntas frequentes
-            </h2>
+            <h2 className="mt-3 text-3xl font-bold tracking-tight text-slate-900 md:text-4xl">Perguntas frequentes</h2>
 
             <div className="mt-10 space-y-4">
               {[
@@ -1497,9 +1540,7 @@ function PublicSite({
           <div className="mx-auto max-w-7xl overflow-hidden rounded-[2rem] bg-emerald-600 p-8 text-white shadow-2xl md:p-12">
             <div className="grid gap-8 lg:grid-cols-[1fr_auto] lg:items-center">
               <div>
-                <div className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-100">
-                  Pronto para crescer
-                </div>
+                <div className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-100">Pronto para crescer</div>
                 <h2 className="mt-3 text-3xl font-bold tracking-tight md:text-4xl">
                   Um site com cara de marca séria, pronto para receber tráfego e gerar contatos.
                 </h2>
@@ -1550,18 +1591,10 @@ function PublicSite({
           </div>
 
           <div className="grid gap-2 text-sm text-slate-600">
-            <a href="#imoveis" className="hover:text-slate-900">
-              Imóveis
-            </a>
-            <a href="#servicos" className="hover:text-slate-900">
-              Serviços
-            </a>
-            <a href="#contato" className="hover:text-slate-900">
-              Contato
-            </a>
-            <a href="#sobre" className="hover:text-slate-900">
-              Sobre
-            </a>
+            <a href="#imoveis" className="hover:text-slate-900">Imóveis</a>
+            <a href="#servicos" className="hover:text-slate-900">Serviços</a>
+            <a href="#contato" className="hover:text-slate-900">Contato</a>
+            <a href="#sobre" className="hover:text-slate-900">Sobre</a>
           </div>
         </div>
       </footer>
@@ -1570,73 +1603,42 @@ function PublicSite({
 }
 
 export default function SirleneImoveisSite() {
- const [properties, setProperties] = useState<Property[]>([]);
-const [leads, setLeads] = useState<Lead[]>([]);
-const [loading, setLoading] = useState(true);
-
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [loading, setLoading] = useState(true);
   const [route, setRoute] = useState("");
 
   useEffect(() => {
-  const loadData = async () => {
-    setLoading(true);
+    const loadData = async () => {
+      setLoading(true);
 
-    const [{ data: propertiesData, error: propertiesError }, { data: leadsData, error: leadsError }] =
-      await Promise.all([
-        supabase.from("properties").select("*").order("created_at", { ascending: false }),
-        supabase.from("leads").select("*").order("created_at", { ascending: false }),
-      ]);
+      const propertiesResponse = await supabase
+        .from("properties")
+        .select("*")
+        .order("created_at", { ascending: false });
 
-    if (propertiesError) {
-      console.error("Erro ao buscar imóveis:", propertiesError);
-    } else if (propertiesData) {
-      setProperties(
-        propertiesData.map((item) => ({
-          id: item.id,
-          slug: item.slug,
-          purpose: item.purpose,
-          title: item.title,
-          neighborhood: item.neighborhood,
-          city: item.city,
-          type: item.type,
-          price: item.price,
-          condoFee: item.condo_fee,
-          iptu: item.iptu,
-          beds: item.beds,
-          baths: item.baths,
-          garage: item.garage,
-          area: item.area,
-          highlight: item.highlight,
-          description: item.description,
-          images: item.images || [],
-          features: item.features || [],
-          mapEmbedUrl: item.map_embed_url,
-        }))
-      );
-    }
+      if (propertiesResponse.error) {
+        console.error("Erro ao buscar imóveis:", propertiesResponse.error);
+      } else {
+        setProperties((propertiesResponse.data || []).map(normalizeProperty));
+      }
 
-    if (leadsError) {
-      console.error("Erro ao buscar leads:", leadsError);
-    } else if (leadsData) {
-      setLeads(
-        leadsData.map((item) => ({
-          id: item.id,
-          type: item.type,
-          propertyId: item.property_id || "",
-          propertyTitle: item.property_title,
-          name: item.name,
-          phone: item.phone,
-          email: item.email,
-          message: item.message,
-          createdAt: item.created_at,
-        }))
-      );
-    }
+      const leadsResponse = await supabase
+        .from("leads")
+        .select("*")
+        .order("created_at", { ascending: false });
 
-    setLoading(false);
-  };
+      if (leadsResponse.error) {
+        console.error("Erro ao buscar leads:", leadsResponse.error);
+      } else {
+        setLeads((leadsResponse.data || []).map(normalizeLead));
+      }
 
-  loadData();
-}, []);
+      setLoading(false);
+    };
+
+    void loadData();
+  }, []);
 
   useEffect(() => {
     const updateRoute = () => setRoute(window.location.hash || "");
@@ -1649,27 +1651,27 @@ const [loading, setLoading] = useState(true);
   }, []);
 
   useEffect(() => {
-  let buffer = "";
+    let buffer = "";
 
-  const handleKey = (e: KeyboardEvent) => {
-    buffer += e.key.toLowerCase();
+    const handleKey = (e: KeyboardEvent) => {
+      buffer += e.key.toLowerCase();
 
-    if (buffer.length > 5) {
-      buffer = buffer.slice(-5);
-    }
+      if (buffer.length > 5) {
+        buffer = buffer.slice(-5);
+      }
 
-    if (buffer === "admin") {
-      window.location.hash = "/painel";
-      buffer = "";
-    }
-  };
+      if (buffer === "admin") {
+        window.location.hash = "/painel";
+        buffer = "";
+      }
+    };
 
-  window.addEventListener("keydown", handleKey);
+    window.addEventListener("keydown", handleKey);
 
-  return () => {
-    window.removeEventListener("keydown", handleKey);
-  };
-}, []);
+    return () => {
+      window.removeEventListener("keydown", handleKey);
+    };
+  }, []);
 
   const propertyMatch = route.match(/^#\/imovel\/(.+)$/);
   const panelMatch = route.startsWith("#/painel");
@@ -1683,139 +1685,108 @@ const [loading, setLoading] = useState(true);
     window.location.hash = "/painel";
   };
 
- const saveProperty = async (incomingProperty: Property) => {
-  const payload = {
-    id: incomingProperty.id,
-    slug: incomingProperty.slug,
-    purpose: incomingProperty.purpose,
-    title: incomingProperty.title,
-    neighborhood: incomingProperty.neighborhood,
-    city: incomingProperty.city,
-    type: incomingProperty.type,
-    price: incomingProperty.price,
-    condo_fee: incomingProperty.condoFee,
-    iptu: incomingProperty.iptu,
-    beds: incomingProperty.beds,
-    baths: incomingProperty.baths,
-    garage: incomingProperty.garage,
-    area: incomingProperty.area,
-    highlight: incomingProperty.highlight,
-    description: incomingProperty.description,
-    images: incomingProperty.images,
-    features: incomingProperty.features,
-    map_embed_url: incomingProperty.mapEmbedUrl,
-  };
+  const saveProperty = async (incomingProperty: Property): Promise<boolean> => {
+    const payload = {
+      id: incomingProperty.id,
+      slug: incomingProperty.slug,
+      purpose: incomingProperty.purpose,
+      title: incomingProperty.title,
+      neighborhood: incomingProperty.neighborhood,
+      city: incomingProperty.city,
+      type: incomingProperty.type,
+      price: incomingProperty.price,
+      condo_fee: incomingProperty.condoFee,
+      iptu: incomingProperty.iptu,
+      beds: incomingProperty.beds,
+      baths: incomingProperty.baths,
+      garage: incomingProperty.garage,
+      area: incomingProperty.area,
+      highlight: incomingProperty.highlight,
+      description: incomingProperty.description,
+      images: incomingProperty.images,
+      features: incomingProperty.features,
+      map_embed_url: incomingProperty.mapEmbedUrl,
+    };
 
-  const { data, error } = await supabase
-    .from("properties")
-    .upsert(payload)
-    .select()
-    .single();
+    const response = await supabase
+      .from("properties")
+      .upsert(payload)
+      .select()
+      .single();
 
-  if (error) {
-    console.error("Erro ao salvar imóvel:", error);
-    return;
-  }
-
-  const normalized: Property = {
-    id: data.id,
-    slug: data.slug,
-    purpose: data.purpose,
-    title: data.title,
-    neighborhood: data.neighborhood,
-    city: data.city,
-    type: data.type,
-    price: data.price,
-    condoFee: data.condo_fee,
-    iptu: data.iptu,
-    beds: data.beds,
-    baths: data.baths,
-    garage: data.garage,
-    area: data.area,
-    highlight: data.highlight,
-    description: data.description,
-    images: data.images || [],
-    features: data.features || [],
-    mapEmbedUrl: data.map_embed_url,
-  };
-
-  setProperties((current) => {
-    const exists = current.some((item) => item.id === normalized.id);
-    if (exists) {
-      return current.map((item) => (item.id === normalized.id ? normalized : item));
+    if (response.error) {
+      console.error("Erro ao salvar imóvel:", JSON.stringify(response.error, null, 2));
+      return false;
     }
-    return [normalized, ...current];
-  });
-};
 
-  const deleteProperty = async (id: string) => {
-  const { error } = await supabase.from("properties").delete().eq("id", id);
+    const normalized = normalizeProperty(response.data);
 
-  if (error) {
-    console.error("Erro ao excluir imóvel:", error);
-    return;
-  }
+    setProperties((current) => {
+      const exists = current.some((item) => item.id === normalized.id);
+      if (exists) {
+        return current.map((item) => (item.id === normalized.id ? normalized : item));
+      }
+      return [normalized, ...current];
+    });
 
-  setProperties((current) => current.filter((item) => item.id !== id));
-  setLeads((current) => current.filter((item) => item.propertyId !== id));
-};
-
-  const addLead = async (incomingLead: Omit<Lead, "id" | "createdAt">) => {
-  const payload = {
-    type: incomingLead.type,
-    property_id: incomingLead.propertyId || null,
-    property_title: incomingLead.propertyTitle,
-    name: incomingLead.name,
-    phone: incomingLead.phone,
-    email: incomingLead.email,
-    message: incomingLead.message,
+    return true;
   };
 
-  const { data, error } = await supabase
-    .from("leads")
-    .insert(payload)
-    .select()
-    .single();
+  const deleteProperty = async (id: string): Promise<void> => {
+    const response = await supabase.from("properties").delete().eq("id", id);
 
-  if (error) {
-    console.error("Erro ao salvar lead:", error);
-    return;
-  }
+    if (response.error) {
+      console.error("Erro ao excluir imóvel:", response.error);
+      return;
+    }
 
-  setLeads((current) => [
-    {
-      id: data.id,
-      type: data.type,
-      propertyId: data.property_id || "",
-      propertyTitle: data.property_title,
-      name: data.name,
-      phone: data.phone,
-      email: data.email,
-      message: data.message,
-      createdAt: data.created_at,
-    },
-    ...current,
-  ]);
-};
+    setProperties((current) => current.filter((item) => item.id !== id));
+    setLeads((current) => current.filter((item) => item.propertyId !== id));
+  };
 
- const deleteLead = async (id: string) => {
-  const { error } = await supabase.from("leads").delete().eq("id", id);
+  const addLead = async (incomingLead: Omit<Lead, "id" | "createdAt">): Promise<void> => {
+    const payload = {
+      type: incomingLead.type,
+      property_id: incomingLead.propertyId || null,
+      property_title: incomingLead.propertyTitle,
+      name: incomingLead.name,
+      phone: incomingLead.phone,
+      email: incomingLead.email,
+      message: incomingLead.message,
+    };
 
-  if (error) {
-    console.error("Erro ao excluir lead:", error);
-    return;
-  }
+    const response = await supabase
+      .from("leads")
+      .insert(payload)
+      .select()
+      .single();
 
-  setLeads((current) => current.filter((item) => item.id !== id));
-};
+    if (response.error) {
+      console.error("Erro ao salvar lead:", response.error);
+      throw response.error;
+    }
+
+    setLeads((current) => [normalizeLead(response.data), ...current]);
+  };
+
+  const deleteLead = async (id: string): Promise<void> => {
+    const response = await supabase.from("leads").delete().eq("id", id);
+
+    if (response.error) {
+      console.error("Erro ao excluir lead:", response.error);
+      return;
+    }
+
+    setLeads((current) => current.filter((item) => item.id !== id));
+  };
 
   if (loading) {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-white text-slate-900">
-      Carregando...
-    </div>
-  );
-}
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white text-slate-900">
+        Carregando...
+      </div>
+    );
+  }
 
   if (panelMatch) {
     return (
