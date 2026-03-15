@@ -746,13 +746,8 @@ function AdminPanel({
             </div>
             <div>
               <div className="text-sm text-slate-300">Área restrita</div>
-              <h1 className="text-2xl font-bold">Painel da corretora</h1>
             </div>
           </div>
-
-          <p className="mt-4 text-sm leading-7 text-slate-300">
-            O visitante comum não consegue editar os imóveis nem acessar os interessados.
-          </p>
 
           <div className="mt-6 space-y-4">
             <input
@@ -1675,10 +1670,6 @@ export default function SirleneImoveisSite() {
     window.location.hash = "";
   };
 
-  const goToAdmin = () => {
-    window.location.hash = "/painel";
-  };
-
   const saveProperty = async (incomingProperty: Property): Promise<boolean> => {
     const payload = {
       id: incomingProperty.id,
@@ -1799,5 +1790,5 @@ export default function SirleneImoveisSite() {
     return <PropertyDetailPage property={property} onBack={goHome} onSubmitLead={addLead} />;
   }
 
-  return <PublicSite properties={properties} goToAdmin={goToAdmin} onSubmitLead={addLead} />;
+  return <PublicSite properties={properties} goToAdmin={() => {}} onSubmitLead={addLead} />;
 }
