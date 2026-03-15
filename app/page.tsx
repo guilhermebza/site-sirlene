@@ -1551,12 +1551,6 @@ function PublicSite({
                     Ver imóveis
                   </span>
                 </a>
-                <button
-                  className="inline-flex cursor-pointer items-center justify-center rounded-2xl border border-white/40 px-5 py-3 font-semibold text-white transition hover:bg-white/10"
-                  onClick={goToAdmin}
-                >
-                  Painel da corretora
-                </button>
               </div>
             </div>
           </div>
