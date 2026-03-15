@@ -29,7 +29,7 @@ const CITY = "Caxias do Sul e Região";
 const CRECI = "087250F";
 const BRAND = "Regina Barboza";
 const SITE_NAME = "Regina Imóveis";
-const ADMIN_PASSWORD = "sirlene2026";
+const ADMIN_PASSWORD = process.env.NEXT_PUBLIC_ADMIN_PASSWORD;
 const PROFILE_IMAGE = "/sirlene.jpeg";
 
 type Property = {
